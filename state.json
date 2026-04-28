@@ -1,0 +1,224 @@
+{
+  "best_known_g": 2779447296000000,
+  "barba_bound": 3919726327358822,
+  "iterations_completed": 53,
+  "total_matrices_tested": 265,
+  "best_determinant": 1616863222038528,
+  "best_matrix_name": "sa_best_v4",
+  "best_construction": "strategy_hermod_simulated_annealing",
+  "top_matrices": [
+    {
+      "name": "sa_best_v4",
+      "det_abs": 1616863222038528,
+      "construction": "strategy_hermod_simulated_annealing",
+      "pct_of_barba": 41.2494,
+      "hash": "31b2dcf476cf45a1"
+    },
+    {
+      "name": "sa_best_v4",
+      "det_abs": 1616863222038528,
+      "construction": "strategy_hermod_simulated_annealing",
+      "pct_of_barba": 41.2494,
+      "hash": "31b2dcf476cf45a1"
+    },
+    {
+      "name": "sa_best_v2",
+      "det_abs": 1615675495809035,
+      "construction": "strategy_hermod_simulated_annealing",
+      "pct_of_barba": 41.2191,
+      "hash": "3cf2b8da02710be4"
+    },
+    {
+      "name": "sa_best_v2",
+      "det_abs": 1615675495809035,
+      "construction": "strategy_hermod_simulated_annealing",
+      "pct_of_barba": 41.2191,
+      "hash": "3cf2b8da02710be4"
+    },
+    {
+      "name": "sa_best_v1",
+      "det_abs": 1584203921620988,
+      "construction": "strategy_hermod_simulated_annealing",
+      "pct_of_barba": 40.4162,
+      "hash": "dde8910c525c75b3"
+    },
+    {
+      "name": "sa_best_v1",
+      "det_abs": 1584203921620988,
+      "construction": "strategy_hermod_simulated_annealing",
+      "pct_of_barba": 40.4162,
+      "hash": "dde8910c525c75b3"
+    },
+    {
+      "name": "sa_best_v3",
+      "det_abs": 1574876057960444,
+      "construction": "strategy_hermod_simulated_annealing",
+      "pct_of_barba": 40.1782,
+      "hash": "2a3a4f58acc82cb8"
+    },
+    {
+      "name": "sa_best_v3",
+      "det_abs": 1574876057960444,
+      "construction": "strategy_hermod_simulated_annealing",
+      "pct_of_barba": 40.1782,
+      "hash": "2a3a4f58acc82cb8"
+    },
+    {
+      "name": "sa_best_v0",
+      "det_abs": 1525334012854275,
+      "construction": "strategy_hermod_simulated_annealing",
+      "pct_of_barba": 38.9143,
+      "hash": "02dad8e4a42d1c9b"
+    },
+    {
+      "name": "sa_best_v0",
+      "det_abs": 1525334012854275,
+      "construction": "strategy_hermod_simulated_annealing",
+      "pct_of_barba": 38.9143,
+      "hash": "02dad8e4a42d1c9b"
+    }
+  ],
+  "construction_stats": {
+    "hadamard_submatrix": {
+      "count": 17,
+      "best_det": 1521681143169035,
+      "best_name": "had_del_r10_c3"
+    },
+    "conference_paley": {
+      "count": 17,
+      "best_det": 226224085401601,
+      "best_name": "conf_paley_flip0"
+    },
+    "circulant": {
+      "count": 17,
+      "best_det": 77922253668352,
+      "best_name": "circulant_0"
+    },
+    "symmetric": {
+      "count": 7,
+      "best_det": 8298019422208,
+      "best_name": "symmetric_0"
+    },
+    "random": {
+      "count": 8,
+      "best_det": 72209137664,
+      "best_name": "random_0"
+    },
+    "circulant_fallback": {
+      "count": 6,
+      "best_det": 87469429096448,
+      "best_name": "pad_4"
+    },
+    "negacyclic": {
+      "count": 1,
+      "best_det": 32708780621824,
+      "best_name": "negacyclic_0"
+    },
+    "skew_symmetric": {
+      "count": 5,
+      "best_det": 8349869408256,
+      "best_name": "skew_sym_0"
+    },
+    "toeplitz": {
+      "count": 7,
+      "best_det": 1163806113792,
+      "best_name": "toeplitz_0"
+    },
+    "strategy_seed_local_flip": {
+      "count": 10,
+      "best_det": 1178833231282172,
+      "best_name": "local_search_corners_r11_c13"
+    },
+    "strategy_seed_conference_border": {
+      "count": 10,
+      "best_det": 1521681143169024,
+      "best_name": "paley_diag_0"
+    },
+    "strategy_seed_negacyclic_family": {
+      "count": 10,
+      "best_det": 16019661783040,
+      "best_name": "negacyclic_v3"
+    },
+    "strategy_hermod_diagonal_paley": {
+      "count": 10,
+      "best_det": 1521681143169024,
+      "best_name": "paley_pos_diag"
+    },
+    "strategy_hermod_diffset_construction": {
+      "count": 10,
+      "best_det": 1521681143169024,
+      "best_name": "diffset_shift0"
+    },
+    "strategy_hermod_goethals_seidel": {
+      "count": 10,
+      "best_det": 1521681143169024,
+      "best_name": "gs_paley_baseline"
+    },
+    "strategy_hermod_paley_bordered": {
+      "count": 10,
+      "best_det": 1521681143169024,
+      "best_name": "bordered_neg_v0"
+    },
+    "strategy_hermod_bruteforce_small": {
+      "count": 10,
+      "best_det": 0,
+      "best_name": null
+    },
+    "strategy_hermod_equivalence_orbit": {
+      "count": 10,
+      "best_det": 731737202098179,
+      "best_name": "equiv_perturb_v1"
+    },
+    "strategy_hermod_simulated_annealing": {
+      "count": 10,
+      "best_det": 1616863222038528,
+      "best_name": "sa_best_v4"
+    },
+    "strategy_hermod_legendre_symmetric": {
+      "count": 10,
+      "best_det": 1521681143169024,
+      "best_name": "legendre_sym_v0"
+    },
+    "strategy_auto_gram_target": {
+      "count": 10,
+      "best_det": 1521681143169024,
+      "best_name": "gram_cluster_del6"
+    },
+    "strategy_hermod_coordinate_exchange": {
+      "count": 10,
+      "best_det": 1521681143169046,
+      "best_name": "coord_exchange_0"
+    },
+    "strategy_auto_genetic_crossover": {
+      "count": 10,
+      "best_det": 132090377011200,
+      "best_name": "genetic_paley_all1xhad_best_s12"
+    },
+    "strategy_auto_paley_permutations": {
+      "count": 10,
+      "best_det": 44435266076672,
+      "best_name": "paley_perm_k1_altdiag"
+    },
+    "strategy_auto_hadamard_product": {
+      "count": 10,
+      "best_det": 1521681143169035,
+      "best_name": "hadprod_check"
+    },
+    "strategy_seed_kronecker_product": {
+      "count": 10,
+      "best_det": 23731372032,
+      "best_name": "block_11_12_s2"
+    },
+    "strategy_seed_symmetric_toeplitz": {
+      "count": 5,
+      "best_det": 326891470848,
+      "best_name": "sym_toeplitz_0"
+    },
+    "strategy_auto_gram_relax": {
+      "count": 5,
+      "best_det": 0,
+      "best_name": null
+    }
+  },
+  "history": []
+}

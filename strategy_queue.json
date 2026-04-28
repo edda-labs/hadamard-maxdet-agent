@@ -1,0 +1,222 @@
+[
+  {
+    "id": "hermod_bruteforce_small",
+    "code": "\"\"\"\nParameterized brute-force: Search over a SMALL number of degrees of freedom.\nA 23\u00d723 \u00b11 matrix has 529 binary variables. But if we impose symmetry\nor block structure, we can reduce to ~10-20 parameters and brute-force\nor do guided search over them.\n\nStrategy: Symmetric matrix with block-constant structure.\nPartition rows into k groups; within each block, all entries identical.\nThis gives k*k parameters. For k=5: 15 independent parameters (symmetric).\nWe can enumerate 2^15 = 32768 possibilities instantly.\n\"\"\"\nimport numpy as np\n\ndef generate_matrices():\n    N = 23\n    rng = np.random.RandomState(420)\n    \n    results = []\n    \n    # Partition into roughly equal groups\n    partitions = [\n        [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4],\n        [0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 4],\n        [0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4],\n        [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3],\n        [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 0, 0, 1],\n    ]\n    \n    for p_idx, partition in enumerate(partitions):\n        k = max(partition) + 1\n        \n        # Generate a block-constant matrix\n        # Try random and heuristic sign assignments\n        for attempt in range(1):  # one per partition for speed\n            # Heuristic: make diagonal blocks +1, off-diagonal blocks mixed\n            M = np.ones((N, N), dtype=np.int8)\n            \n            # Generate k\u00d7k sign pattern\n            block_signs = rng.choice([-1, 1], size=(k, k))\n            # Make symmetric\n            block_signs = np.triu(block_signs) + np.triu(block_signs, 1).T\n            np.fill_diagonal(block_signs, 1)  # diagonal blocks = +1\n            \n            for i in range(N):\n                for j in range(N):\n                    bi = partition[i]\n                    bj = partition[j]\n                    M[i, j] = block_signs[bi, bj]\n            \n            results.append((M, f'block5_part{p_idx}'))\n    \n    return results\n",
+    "rationale": "Reduced-parameter brute-force via block-constant partitions \u2014 15 binary params instead of 529, instant enumeration frontier",
+    "priority": 8,
+    "created_by": "hermod",
+    "attempts": 10,
+    "best_det": 0,
+    "best_name": null
+  },
+  {
+    "id": "hermod_goethals_seidel",
+    "code": "\"\"\"\nGoethals-Seidel construction for skew-Hadamard matrices.\nFor n \u2261 3 mod 4, the Paley core is skew-symmetric (Q^T = -Q off-diagonal).\nA skew-Hadamard matrix H = I + S where S is skew-symmetric has H + H^T = 2I.\n\nFor order 23: build from 4 circulant matrices A,B,C,D that satisfy\nthe Goethals-Seidel array condition, then embed in a block matrix.\n\nSince 23 is odd and not divisible by 4, we can't get a full Goethals-Seidel.\nBut we can build the matrix W = I + S where S is skew-symmetric with specific\nblock-circulant structure.\n\"\"\"\nimport numpy as np\nfrom constructions import paley_core\n\ndef generate_matrices():\n    N = 23\n    rng = np.random.RandomState(9001)\n    Q = paley_core(N).astype(np.int8)  # skew-symmetric Paley core\n    \n    results = []\n    \n    for variant in range(5):\n        M = Q.copy()\n        \n        # The Paley core already gives |det| ~ 24^11.\n        # But what if we break the Paley structure in the OFF-DIAGONAL?\n        # Keep Q's sign pattern but randomize the zero/nonzero positions\n        # within each row to create a new skew-symmetric matrix.\n        \n        if variant == 0:\n            # Pure Paley (baseline)\n            np.fill_diagonal(M, 1)\n            results.append((M, 'gs_paley_baseline'))\n            \n        elif variant == 1:\n            # Block-skew: make 3 diagonal blocks skew-symmetric\n            np.fill_diagonal(M, 1)\n            M[8:16, 8:16] = -M[8:16, 8:16]  # flip a central block\n            np.fill_diagonal(M[8:16, 8:16], 1)  # restore diagonal\n            results.append((M, 'gs_block_flip'))\n            \n        elif variant == 2:\n            # Anti-Paley: swap the sign pattern\n            np.fill_diagonal(M, 1)\n            # Invert the off-diagonal structure\n            upper = np.triu(M, 1)\n            M = -upper + upper.T\n            np.fill_diagonal(M, 1)\n            results.append((M, 'gs_anti_paley'))\n            \n        elif variant == 3:\n            # Mix Paley with random skew-symmetric\n            S = rng.choice([-1, 1], size=(N, N)).astype(np.int8)\n            S = np.triu(S, 1) - np.triu(S, 1).T  # make skew-symmetric\n            M = (Q + S) // 2  # elementwise average \u2014 will have zeros!\n            # Fix: take sign of Q + 0.3*S\n            M = np.sign(Q.astype(np.float64) + 0.3 * S.astype(np.float64)).astype(np.int8)\n            np.fill_diagonal(M, 1)\n            results.append((M, 'gs_mixed'))\n            \n        else:\n            # Skew-symmetric with block-Toeplitz structure\n            for i in range(N):\n                for j in range(i+1, N):\n                    d = (j - i)\n                    if d <= 11:\n                        M[i, j] = 1 if d % 3 == 0 else -1\n                        M[j, i] = -M[i, j]\n            np.fill_diagonal(M, 1)\n            results.append((M, 'gs_toeplitz_skew'))\n    \n    return results\n",
+    "rationale": "Goethals-Seidel variations on skew-symmetric matrices \u2014 perturb the Paley off-diagonal structure while maintaining skew-symmetry",
+    "priority": 9,
+    "created_by": "hermod",
+    "attempts": 10,
+    "best_det": 0,
+    "best_name": null
+  },
+  {
+    "id": "hermod_paley_bordered",
+    "code": "\"\"\"\nBordered Paley construction: Paley Type I gives Hadamard of order p+1.\nFor p=23 (\u22613 mod 4), H24 = [Q+I | 1; 1^T | -1].\nBut we need ORDER 23, not 24. \n\nIdea: Build a bordered matrix from the 22\u00d722 Paley-related structure.\nTake the 23\u00d723 Paley core Q, but add a BORDER of -1s on one side,\nthen delete a row/column to get back to 23\u00d723 \u2014 this perturbs the structure\ndifferently than simple deletion from H24.\n\nActually try: Build a 24\u00d724 matrix that's NEAR-Hadamard, then extract 23\u00d723\nusing the Schur complement to maximize the remaining determinant.\n\"\"\"\nimport numpy as np\nfrom constructions import paley_core, hadamard_24\n\ndef generate_matrices():\n    N = 23\n    H24 = hadamard_24()\n    Q = paley_core(23).astype(np.int8)\n    \n    results = []\n    \n    # Try: Negate entire rows of H24, then delete \u2014 does det of 23\u00d723 change?\n    for variant in range(5):\n        H_mod = H24.copy().astype(np.int8)\n        # Negate specific rows of the 24\u00d724 BEFORE deletion\n        rows_to_negate = [variant, variant+5, variant+10, variant+15, variant+20]\n        for r in rows_to_negate:\n            if r < 24:\n                H_mod[r, :] *= -1\n        \n        # Also negate some columns\n        H_mod[:, variant*4 % 24] *= -1\n        H_mod[:, (variant*4+11) % 24] *= -1\n        \n        # Then do the deletion\n        M = np.delete(np.delete(H_mod, variant % 24, axis=0), \n                      (variant*7+3) % 24, axis=1).astype(np.int8)\n        \n        results.append((M, f'bordered_neg_v{variant}'))\n    \n    return results\n",
+    "rationale": "Pre-negate rows/cols of H24 before deletion \u2014 breaks equivalence class, potentially accessing different 23\u00d723 determinant values",
+    "priority": 9,
+    "created_by": "hermod",
+    "attempts": 10,
+    "best_det": 0,
+    "best_name": null
+  },
+  {
+    "id": "hermod_diffset_construction",
+    "code": "\"\"\"\nDifference set construction from Z_23.\nA (23,11,5) cyclic difference set exists since 23 = 4*5 + 3 (Paley-Hadamard).\nThe incidence matrix of the symmetric (23,11,5) design gives a +1/-1 matrix\nwith known determinant properties.\n\nAlso try: Payley difference set D = {quadratic residues mod 23} = {1,2,3,4,6,8,9,12,13,16,18}.\nSize 11. This generates the Paley core Q where Q[i,j] = 1 if (j-i) in D, -1 otherwise (for i\u2260j).\n\"\"\"\nimport numpy as np\n\ndef generate_matrices():\n    N = 23\n    # Quadratic residues mod 23 (the difference set)\n    D = {1, 2, 3, 4, 6, 8, 9, 12, 13, 16, 18}\n    \n    results = []\n    \n    # Strategy: Build the symmetric block design incidence matrix\n    # M[i,j] = +1 if (j-i) mod 23 in D, -1 otherwise\n    # This is Q+I from the Paley core \u2014 already explored.\n    # Instead, try SHIFTED versions and COMPLEMENTARY designs.\n    \n    for shift in range(5):\n        D_shifted = {(x + shift) % 23 for x in D}\n        \n        M = np.ones((N, N), dtype=np.int8)\n        for i in range(N):\n            for j in range(N):\n                d = (j - i) % 23\n                if d in D_shifted:\n                    M[i, j] = 1\n                elif d == 0:\n                    # Diagonal: try different patterns\n                    if shift % 2 == 0:\n                        M[i, j] = 1\n                    else:\n                        M[i, j] = -1\n                else:\n                    M[i, j] = -1\n        \n        results.append((M, f'diffset_shift{shift}'))\n    \n    return results\n",
+    "rationale": "Cyclic difference set (23,11,5) incidence matrices \u2014 the algebraic object behind Paley, with shifted and complemented variants",
+    "priority": 10,
+    "created_by": "hermod",
+    "attempts": 10,
+    "best_det": 0,
+    "best_name": null
+  },
+  {
+    "id": "seed_local_flip",
+    "code": "\n# Local search: flip individual entries in best known matrix\n# Start from the H24-submatrix deletion approach but try sign perturbations\nimport numpy as np\nfrom constructions import hadamard_24\n\ndef generate_matrices():\n    H24 = hadamard_24()\n    results = []\n\n    # Try different row/col deletions as base\n    for idx, (r, c) in enumerate([(0, 0), (5, 7), (11, 13), (17, 19), (23, 1)]):\n        M = np.delete(np.delete(H24, r, axis=0), c, axis=1).astype(np.int8)\n\n        # Flip strategic entries: corners and center\n        M_flipped = M.copy()\n        # Flip corners\n        M_flipped[0, 0] *= -1\n        M_flipped[0, 22] *= -1\n        M_flipped[22, 0] *= -1\n        M_flipped[22, 22] *= -1\n        # Flip some diagonal entries\n        for i in [5, 11, 17]:\n            M_flipped[i, i] *= -1\n        results.append((M_flipped, f\"local_search_corners_r{r}_c{c}\"))\n\n        if len(results) >= 5:\n            break\n    return results\n",
+    "rationale": "Local perturbation of best known Hadamard submatrices \u2014 flip strategic entries",
+    "priority": 8,
+    "created_by": "seed",
+    "attempts": 99,
+    "best_det": 1178833231282172,
+    "best_name": null
+  },
+  {
+    "id": "seed_conference_border",
+    "code": "\n# Build from Paley conference-like core with border variations\nimport numpy as np\nfrom constructions import paley_core\n\ndef generate_matrices():\n    Q = paley_core(23)  # 23x23 Paley core (skew-symmetric)\n    results = []\n\n    # Strategy 1: Direct Paley core with various diagonals\n    for diag_pattern in range(5):\n        M = Q.copy().astype(np.int8)\n        # Different diagonal patterns\n        if diag_pattern == 0:\n            np.fill_diagonal(M, 1)\n        elif diag_pattern == 1:\n            np.fill_diagonal(M, -1)\n        elif diag_pattern == 2:\n            M[np.arange(23), np.arange(23)] = np.where(np.arange(23) % 2 == 0, 1, -1)\n        elif diag_pattern == 3:\n            M[np.arange(23), np.arange(23)] = np.where(np.arange(23) % 3 == 0, 1, -1)\n        else:\n            # All zeros on diagonal (not \u00b11! fix below)\n            np.fill_diagonal(M, 1)\n\n        results.append((M, f'paley_diag_{diag_pattern}'))\n\n    return results[:5]\n",
+    "rationale": "Use Paley core (23x23) directly with various diagonal patterns",
+    "priority": 6,
+    "created_by": "seed",
+    "attempts": 99,
+    "best_det": 1521681143169024,
+    "best_name": null
+  },
+  {
+    "id": "seed_negacyclic_family",
+    "code": "\n# Negacyclic matrices: each row is negative of previous row shifted\n# Variation: try different first rows\nimport numpy as np\n\ndef generate_matrices():\n    N = 23\n    rng = np.random.RandomState(42)\n    results = []\n\n    for i in range(5):\n        # Generate first row with specific patterns\n        if i == 0:\n            first_row = np.ones(N, dtype=np.int8)\n        elif i == 1:\n            first_row = np.array([1, -1] * 11 + [1], dtype=np.int8)\n        elif i == 2:\n            first_row = np.where(np.arange(N) % 2 == 0, 1, -1).astype(np.int8)\n        elif i == 3:\n            first_row = rng.choice([-1, 1], size=N).astype(np.int8)\n        else:\n            # Alternating blocks of 3\n            first_row = np.tile(np.array([1, 1, -1], dtype=np.int8), 8)[:N]\n\n        M = np.zeros((N, N), dtype=np.int8)\n        M[0] = first_row\n        for r in range(1, N):\n            M[r, 0] = -M[r-1, N-1]\n            M[r, 1:] = -M[r-1, :-1]\n\n        results.append((M, f'negacyclic_v{i}'))\n\n    return results\n",
+    "rationale": "Negacyclic matrices with structural first-row patterns",
+    "priority": 5,
+    "created_by": "seed",
+    "attempts": 99,
+    "best_det": 16019661783040,
+    "best_name": null
+  },
+  {
+    "id": "seed_kronecker_product",
+    "code": "\n# Kronecker product approach: 23 is prime, but try near-factorizations\n# 23 = 22 + 1 or use bordering techniques\nimport numpy as np\n\ndef generate_matrices():\n    N = 23\n    results = []\n\n    # Strategy: Build 11x11 structured blocks + 1 border\n    for seed in range(5):\n        rng = np.random.RandomState(100 + seed)\n\n        # Build 11x11 block matrix\n        A = rng.choice([-1, 1], size=(11, 11)).astype(np.int8)\n        B = rng.choice([-1, 1], size=(11, 12)).astype(np.int8)\n        C = rng.choice([-1, 1], size=(12, 11)).astype(np.int8)\n        D = rng.choice([-1, 1], size=(12, 12)).astype(np.int8)\n\n        # Assemble 23x23 = 11+12\n        M = np.zeros((N, N), dtype=np.int8)\n        M[:11, :11] = A\n        M[:11, 11:] = B\n        M[11:, :11] = C\n        M[11:, 11:] = D\n\n        results.append((M, f'block_11_12_s{seed}'))\n\n    return results\n",
+    "rationale": "Block matrix construction: 23 = 11+12 split",
+    "priority": 4,
+    "created_by": "seed",
+    "attempts": 10,
+    "best_det": 0,
+    "best_name": null
+  },
+  {
+    "id": "seed_symmetric_toeplitz",
+    "code": "\n# Symmetric Toeplitz matrices: entries depend only on |i-j|\nimport numpy as np\n\ndef generate_matrices():\n    N = 23\n    results = []\n\n    for i in range(5):\n        rng = np.random.RandomState(200 + i)\n        # Generate the first row (defines the whole matrix)\n        first_row = rng.choice([-1, 1], size=N).astype(np.int8)\n\n        # Build symmetric Toeplitz\n        M = np.zeros((N, N), dtype=np.int8)\n        for r in range(N):\n            for c in range(N):\n                M[r, c] = first_row[abs(r - c)]\n\n        results.append((M, f'sym_toeplitz_{i}'))\n\n    return results\n",
+    "rationale": "Symmetric Toeplitz \u2014 highly structured, depends on only 23 values",
+    "priority": 4,
+    "created_by": "seed",
+    "attempts": 5,
+    "best_det": 0,
+    "best_name": null
+  },
+  {
+    "id": "hermod_diagonal_paley",
+    "code": "# Diagonal-varied Paley: M = Q + D where D diagonal has strategic +/-1\n# The Gram matrix is G = 24I - J + (QD - DQ) - commutator changes structure\nimport numpy as np\nfrom constructions import paley_core\n\ndef generate_matrices():\n    Q = paley_core(23).astype(np.int8)\n    results = []\n    \n    # Pattern 1: All +1 diagonal\n    M1 = Q.copy()\n    np.fill_diagonal(M1, 1)\n    results.append((M1, \"paley_pos_diag\"))\n    \n    # Pattern 2: All -1 diagonal (maximizes commutator)\n    M2 = Q.copy()\n    np.fill_diagonal(M2, -1)\n    results.append((M2, \"paley_neg_diag\"))\n    \n    # Pattern 3: Quadratic residue-based diagonal\n    residues = {pow(i, 2, 23) for i in range(1, 23)}\n    D3 = np.array([1 if i in residues else -1 for i in range(23)], dtype=np.int8)\n    M3 = Q.copy()\n    M3[np.arange(23), np.arange(23)] = D3\n    results.append((M3, \"paley_qr_diag\"))\n    \n    # Pattern 4: Alternating blocks of 4: +,+,-,-,...\n    D4 = np.tile(np.array([1,1,-1,-1], dtype=np.int8), 6)[:23]\n    M4 = Q.copy()\n    M4[np.arange(23), np.arange(23)] = D4\n    results.append((M4, \"paley_alt4_diag\"))\n    \n    # Pattern 5: First half +1, second half -1\n    D5 = np.ones(23, dtype=np.int8)\n    D5[11:] = -1\n    M5 = Q.copy()\n    M5[np.arange(23), np.arange(23)] = D5\n    results.append((M5, \"paley_split_diag\"))\n    \n    return results\n",
+    "rationale": "Diagonal-varied Paley core - non-constant D adds commutator QD-DQ to Gram matrix, potentially exceeding 24^11",
+    "priority": 9,
+    "created_by": "hermod",
+    "attempts": 10,
+    "best_det": 0,
+    "best_name": null
+  },
+  {
+    "id": "hermod_equivalence_orbit",
+    "code": "# Apply Hadamard equivalence transformations to H24 BEFORE deleting row/col,\n# then apply local sign flips to break out of the 24^11 equivalence class.\n# Different equivalence transforms give structurally different 23x23 matrices.\nimport numpy as np\nfrom constructions import hadamard_24\n\ndef apply_equiv(H, row_signs, col_signs, row_perm, col_perm):\n    # Apply Hadamard equivalence: R * H * C\n    H2 = H.copy().astype(np.int8)\n    H2 = H2 * row_signs[:, np.newaxis]\n    H2 = H2 * col_signs[np.newaxis, :]\n    H2 = H2[row_perm, :]\n    H2 = H2[:, col_perm]\n    return H2\n\ndef generate_matrices():\n    H24 = hadamard_24()\n    rng = np.random.RandomState(789)\n    results = []\n    \n    for variant in range(5):\n        # Random equivalence transformation\n        row_signs = rng.choice([-1, 1], size=24).astype(np.int8)\n        col_signs = rng.choice([-1, 1], size=24).astype(np.int8)\n        row_perm = rng.permutation(24)\n        col_perm = rng.permutation(24)\n        \n        H_transformed = apply_equiv(H24, row_signs, col_signs, row_perm, col_perm)\n        \n        # Delete row/col to get 23x23\n        r_del = variant * 4\n        c_del = (variant * 4 + 7) % 24\n        M = np.delete(np.delete(H_transformed, r_del, axis=0), c_del, axis=1).astype(np.int8)\n        \n        # CRITICAL: Apply strategic local flips to break det=24^11 invariant\n        M_perturbed = M.copy()\n        # Flip a 3x3 block in the upper left\n        M_perturbed[0:3, 0:3] *= -1\n        # Flip every 5th entry on the diagonal\n        for i in range(0, 23, 5):\n            M_perturbed[i, i] *= -1\n        \n        results.append((M_perturbed, f\"equiv_perturb_v{variant}\"))\n    \n    return results\n",
+    "rationale": "Hadamard equivalence orbit search - different H24 transforms give structurally diverse 23x23 bases for perturbation",
+    "priority": 8,
+    "created_by": "hermod",
+    "attempts": 10,
+    "best_det": 0,
+    "best_name": null
+  },
+  {
+    "id": "hermod_simulated_annealing",
+    "code": "# Simulated annealing on best H24 submatrices.\n# Uses Metropolis criterion with det-based temperature.\n# Multiple starting points, multiple SA runs.\nimport numpy as np\nfrom constructions import hadamard_24\n\ndef generate_matrices():\n    N = 23\n    H24 = hadamard_24()\n    rng = np.random.RandomState(314159)\n    results = []\n    \n    # Starting points: best H24 deletions\n    start_pairs = [(10, 3), (16, 4), (13, 14), (18, 15), (9, 8)]\n    \n    for variant, (r_del, c_del) in enumerate(start_pairs):\n        M = np.delete(np.delete(H24, r_del, axis=0), c_del, axis=1).astype(np.int8)\n        \n        # Simulated annealing\n        T0 = 5e13  # Initial temperature\n        current_M = M.copy()\n        current_det = abs(int(round(np.linalg.det(current_M.astype(np.float64)))))\n        best_M = current_M.copy()\n        best_det = current_det\n        \n        for step in range(300):\n            T = T0 / (1 + np.log(1 + step))\n            \n            # Propose: flip a random entry\n            fi, fj = rng.randint(0, N, size=2)\n            current_M[fi, fj] *= -1\n            \n            new_det = abs(int(round(np.linalg.det(current_M.astype(np.float64)))))\n            delta = new_det - current_det\n            \n            if delta > 0 or (T > 1 and rng.random() < np.exp(delta / T)):\n                current_det = new_det\n                if current_det > best_det:\n                    best_det = current_det\n                    best_M = current_M.copy()\n            else:\n                current_M[fi, fj] *= -1  # Reject\n        \n        results.append((best_M, f\"sa_best_v{variant}\"))\n    \n    return results\n",
+    "rationale": "Simulated annealing on top H24 submatrices - stochastic search to escape 24^11 plateau",
+    "priority": 7,
+    "created_by": "hermod",
+    "attempts": 10,
+    "best_det": 0,
+    "best_name": null
+  },
+  {
+    "id": "hermod_legendre_symmetric",
+    "code": "# Symmetric +/-1 matrices constructed from multiplicative characters mod 23.\n# Unlike the Paley core (skew-symmetric), these are SYMMETRIC with\n# carefully chosen sign patterns based on quadratic residues and cosets.\nimport numpy as np\n\ndef generate_matrices():\n    N = 23\n    MOD = 23\n    # Quadratic residues mod 23\n    qr = set()\n    for i in range(1, MOD):\n        qr.add(pow(i, 2, MOD))\n    \n    results = []\n    \n    for variant in range(5):\n        M = np.zeros((N, N), dtype=np.int8)\n        \n        for i in range(N):\n            for j in range(N):\n                if i == j:\n                    if variant == 0:\n                        M[i, j] = 1\n                    elif variant == 1:\n                        M[i, j] = 1 if i in qr else -1\n                    elif variant == 2:\n                        M[i, j] = 1 if i % 2 == 0 else -1\n                    elif variant == 3:\n                        M[i, j] = 1 if i < 12 else -1\n                    else:\n                        # Based on multiplicative order mod 23\n                        # Primitive root is 5; entries with order dividing (p-1)/2\n                        M[i, j] = 1 if pow(5, i, 23) < 12 else -1\n                else:\n                    d = (i - j) % MOD\n                    if variant == 0:\n                        # Pure QR pattern (symmetric, unlike Paley)\n                        M[i, j] = 1 if d in qr else -1\n                    elif variant == 1:\n                        # Product of Legendre symbols\n                        li = 1 if (i == 0 or i in qr) else -1\n                        lj = 1 if (j == 0 or j in qr) else -1\n                        M[i, j] = li * lj * (1 if d in qr else -1)\n                    elif variant == 2:\n                        # Sum index pattern: (i+j) mod 23\n                        s = (i + j) % MOD\n                        M[i, j] = 1 if (s == 0 or s in qr) else -1\n                    elif variant == 3:\n                        # Sum-of-squares pattern\n                        s = (i*i + j*j) % MOD\n                        M[i, j] = 1 if (s == 0 or s in qr) else -1\n                    else:\n                        # Product index pattern: (i*j) mod 23\n                        p = (i * j) % MOD\n                        M[i, j] = 1 if (p == 0 or p in qr) else -1\n        \n        results.append((M, f\"legendre_sym_v{variant}\"))\n    \n    return results\n",
+    "rationale": "Symmetric matrices from multiplicative characters mod 23 - structurally different from Paley, may yield higher det",
+    "priority": 7,
+    "created_by": "hermod",
+    "attempts": 10,
+    "best_det": 0,
+    "best_name": null
+  },
+  {
+    "id": "hermod_coordinate_exchange",
+    "code": "# Coordinate exchange algorithm for D-optimal design.\n# Greedy: for each entry, try flipping; if det improves, keep it.\n# Multiple passes until convergence or max iterations.\n# Start from best matrices, not random.\nimport numpy as np\nfrom constructions import hadamard_24, paley_core\n\ndef generate_matrices():\n    N = 23\n    H24 = hadamard_24()\n    Q = paley_core(23)\n    results = []\n    \n    # Best starting points from state\n    starts = []\n    starts.append(np.delete(np.delete(H24, 10, axis=0), 3, axis=1).astype(np.int8))\n    starts.append(np.delete(np.delete(H24, 16, axis=0), 4, axis=1).astype(np.int8))\n    starts.append(np.delete(np.delete(H24, 13, axis=0), 14, axis=1).astype(np.int8))\n    \n    # Paley + diagonal variants\n    for diag_fill in [1, -1]:\n        M = Q.copy().astype(np.int8)\n        np.fill_diagonal(M, diag_fill)\n        starts.append(M)\n    \n    for idx, start_M in enumerate(starts[:5]):\n        M = start_M.copy()\n        best_M = M.copy()\n        best_det = abs(int(round(np.linalg.det(M.astype(np.float64)))))\n        \n        N_entries = N * N\n        for iteration in range(5):  # Multiple passes\n            improved = False\n            order = np.random.permutation(N_entries)\n            for pos in order:\n                i, j = divmod(pos, N)\n                M[i, j] *= -1\n                new_det = abs(int(round(np.linalg.det(M.astype(np.float64)))))\n                if new_det > best_det:\n                    best_det = new_det\n                    best_M = M.copy()\n                    improved = True\n                else:\n                    M[i, j] *= -1  # Revert\n            if not improved:\n                break\n        \n        results.append((best_M, f\"coord_exchange_{idx}\"))\n    \n    return results\n",
+    "rationale": "Coordinate exchange (D-optimal design) - greedy entry-by-entry optimization from best starting points",
+    "priority": 6,
+    "created_by": "hermod",
+    "attempts": 10,
+    "best_det": 0,
+    "best_name": null
+  },
+  {
+    "id": "auto_gram_target",
+    "code": "\"\"\"\nGram matrix targeting: Build matrices whose Gram matrix G = M M^T\napproximates the optimal Ehlich structure for n \u2261 3 mod 4.\n\nFor n=23, Ehlich bound says optimal G is block-diagonal after subtracting J,\nwith block structure: 4 blocks of size 6 (first 3) and size 5 (last 1), since 23 = 6+6+6+5.\n\nStrategy: Start from a structured base, then iteratively flip entries\nto push the Gram matrix toward the ideal pattern.\n\"\"\"\nimport numpy as np\n\ndef generate_matrices():\n    N = 23\n    from constructions import hadamard_24\n\n    # Ideal Gram matrix for Ehlich structure\n    # For n=23, s=6 (number of blocks from Ehlich table for 15\u2264n\u226459)\n    # Block sizes: r=3, v=5 blocks of size 4, u=1 block of size 3 \u2192 5*4+1*3=23 \u2713\n    # The ideal G has blocks of (n-3)I + 4J = 20I + 4J within each cluster\n\n    H24 = hadamard_24()\n    results = []\n\n    # Strategy: Delete row/col from H24, then try to reorganize into 4 clusters\n    # by permuting rows to maximize block structure\n    for deletion_idx in range(5):\n        r_del = [0, 6, 12, 18, 23][deletion_idx]\n        c_del = [0, 6, 12, 18, 23][deletion_idx]\n        M = np.delete(np.delete(H24, r_del, axis=0), c_del, axis=1).astype(np.int8)\n\n        # Permute rows to cluster similar rows together\n        # Compute row similarities and greedily cluster\n        G = M @ M.T\n        # Start with first row, find similar rows\n        order = [0]\n        remaining = set(range(1, N))\n        while remaining:\n            last = order[-1]\n            # Find row most correlated with last\n            best = max(remaining, key=lambda i: abs(G[last, i]))\n            order.append(best)\n            remaining.remove(best)\n\n        M_perm = M[order, :]\n\n        # Now try block-negating: negate entire blocks to optimize\n        block_sizes = [6, 6, 6, 5]\n        offset = 0\n        M_blocks = M_perm.copy()\n        for bsize in block_sizes:\n            # Try negating this block\n            for flip in [False, True]:\n                if flip:\n                    M_blocks[offset:offset+bsize, :] *= -1\n            offset += bsize\n\n        results.append((M_blocks, f'gram_cluster_del{r_del}'))\n\n    return results[:5]\n",
+    "rationale": "Target the Ehlich-optimal Gram matrix structure via row clustering and block negation",
+    "priority": 7,
+    "created_by": "hermod",
+    "attempts": 10,
+    "best_det": 0,
+    "best_name": null
+  },
+  {
+    "id": "auto_genetic_crossover",
+    "code": "\"\"\"\nGenetic algorithm: Breed offspring from the best-performing matrices.\nTake rows from parent matrices, creating hybrids that preserve\nstructural properties while exploring new territory.\n\"\"\"\nimport numpy as np\nfrom constructions import hadamard_24, paley_core\n\ndef generate_matrices():\n    N = 23\n    rng = np.random.RandomState(777)\n\n    # Build a diverse \"population\" of parent matrices\n    parents = []\n\n    # Parent 1: Best Hadamard submatrix (R10xC3 was best)\n    H24 = hadamard_24()\n    p1 = np.delete(np.delete(H24, 10, axis=0), 3, axis=1).astype(np.int8)\n    parents.append((\"had_best\", p1))\n\n    # Parent 2: Paley core with all-ones diagonal\n    Q = paley_core(23).astype(np.int8)\n    np.fill_diagonal(Q, 1)\n    parents.append((\"paley_all1\", Q))\n\n    # Parent 3: Paley core with alternating diagonal\n    Q2 = paley_core(23).astype(np.int8)\n    Q2[np.arange(N), np.arange(N)] = np.where(np.arange(N) % 2 == 0, 1, -1).astype(np.int8)\n    parents.append((\"paley_alt\", Q2))\n\n    # Parent 4: Negacyclic\n    first_row = np.where(np.arange(N) % 2 == 0, 1, -1).astype(np.int8)\n    M = np.zeros((N, N), dtype=np.int8)\n    M[0] = first_row\n    for r in range(1, N):\n        M[r, 0] = -M[r-1, N-1]\n        M[r, 1:] = -M[r-1, :-1]\n    parents.append((\"nega\", M))\n\n    results = []\n\n    for offspring_idx in range(5):\n        # Pick 2 parents\n        p1_idx, p2_idx = rng.choice(len(parents), 2, replace=False)\n        name1, P1 = parents[p1_idx]\n        name2, P2 = parents[p2_idx]\n\n        # Create offspring: take some rows from P1, some from P2\n        # Use a random split: first k rows from P1, rest from P2\n        split = rng.randint(5, 19)\n        offspring = np.zeros((N, N), dtype=np.int8)\n\n        # 60% chance: row-based crossover\n        if rng.random() < 0.6:\n            offspring[:split, :] = P1[:split, :]\n            offspring[split:, :] = P2[split:, :]\n        else:\n            # Column-based crossover\n            offspring[:, :split] = P1[:, :split]\n            offspring[:, split:] = P2[:, split:]\n\n        # Mutation: flip 1-3 random entries\n        n_mutations = rng.randint(1, 4)\n        for _ in range(n_mutations):\n            i, j = rng.randint(0, N, 2)\n            offspring[i, j] *= -1\n\n        results.append((offspring, f'genetic_{name1}x{name2}_s{split}'))\n\n    return results\n",
+    "rationale": "Genetic crossover between best Hadamard submatrix, Paley variants, and negacyclic \u2014 preserve structural patterns via row/col inheritance",
+    "priority": 6,
+    "created_by": "hermod",
+    "attempts": 10,
+    "best_det": 0,
+    "best_name": null
+  },
+  {
+    "id": "auto_paley_permutations",
+    "code": "\"\"\"\nPaley permutation ensemble: The Paley core Q has strong algebraic structure\nfrom the quadratic character of GF(23). Applying field automorphisms\n(multiplication by quadratic residues) produces equivalent but different matrices.\n\nStrategy: Permute rows/cols of Paley core by multiplying indices by\nquadratic residues mod 23, then fill diagonal intelligently.\n\"\"\"\nimport numpy as np\nfrom constructions import paley_core\n\ndef legendre(a, p):\n    if a % p == 0:\n        return 0\n    ls = pow(a, (p-1)//2, p)\n    return -1 if ls == p - 1 else ls\n\ndef generate_matrices():\n    N = 23\n    Q = paley_core(N).astype(np.int8)\n\n    # Quadratic residues mod 23 (the squares)\n    residues = sorted({(i*i) % 23 for i in range(1, 23)})\n    # Non-residues\n    nonresidues = [i for i in range(1, 23) if i not in residues]\n\n    results = []\n\n    # Strategy 1: Multiply indices by residue k -> permutation\n    for idx, k in enumerate(residues[:5]):\n        # Permutation: i -> (i * k) mod 23\n        perm = [(i * k) % N for i in range(N)]\n        Q_perm = Q[perm, :][:, perm]\n\n        # Try diagonal fill strategy\n        # For skew-symmetric Q (since 23\u22613 mod 4), Q[i,i]=0, Q[i,j]=-Q[j,i]\n        # Fill diagonal: alternating pattern\n        M = Q_perm.copy()\n        diag_vals = np.where(np.arange(N) % 2 == 0, 1, -1).astype(np.int8)\n        np.fill_diagonal(M, diag_vals)\n\n        results.append((M, f'paley_perm_k{k}_altdiag'))\n\n    return results[:5]\n",
+    "rationale": "Exploit GF(23) field automorphisms \u2014 permuting Paley core by quadratic residue multiplication creates non-equivalent matrices with the same algebraic pedigree",
+    "priority": 5,
+    "created_by": "hermod",
+    "attempts": 10,
+    "best_det": 0,
+    "best_name": null
+  },
+  {
+    "id": "auto_schur_border",
+    "code": "\"\"\"\nSchur complement approach: Split 23\u00d723 into a core submatrix\nand borders. Use the Schur determinant formula to optimize.\n\ndet(M) = det(A) * det(D - C A^{-1} B)\n\nBuild A as a near-Hadamard submatrix, optimize borders.\n\"\"\"\nimport numpy as np\nfrom constructions import hadamard_24\n\ndef generate_matrices():\n    N = 23\n    H24 = hadamard_24()\n    rng = np.random.RandomState(555)\n\n    results = []\n\n    for core_size in [12, 11, 15, 8, 18]:\n        # Build A: core_size \u00d7 core_size submatrix from H24\n        A = H24[:core_size, :core_size].astype(np.int8)\n\n        # Build borders B, C, D randomly but structured\n        b_rows = core_size\n        b_cols = N - core_size\n\n        if b_cols <= 0:\n            continue\n\n        B = rng.choice([-1, 1], size=(b_rows, b_cols)).astype(np.int8)\n        C = rng.choice([-1, 1], size=(b_cols, b_rows)).astype(np.int8)\n        D = rng.choice([-1, 1], size=(b_cols, b_cols)).astype(np.int8)\n\n        # Make D symmetric for better properties\n        D = np.triu(D) + np.triu(D, 1).T\n        np.fill_diagonal(D, rng.choice([-1, 1], size=b_cols))\n\n        # Assemble\n        M = np.zeros((N, N), dtype=np.int8)\n        M[:core_size, :core_size] = A\n        M[:core_size, core_size:] = B\n        M[core_size:, :core_size] = C\n        M[core_size:, core_size:] = D\n\n        results.append((M, f'schur_core{core_size}'))\n\n    return results[:5]\n",
+    "rationale": "Schur complement block construction with varying core sizes \u2014 the core inherits Hadamard structure while borders are optimized separately",
+    "priority": 4,
+    "created_by": "hermod",
+    "attempts": 0,
+    "best_det": 0,
+    "best_name": null
+  },
+  {
+    "id": "auto_hadamard_product",
+    "code": "\"\"\"\nHadamard (elementwise) product of two structured matrices.\nIf A and B have complementary structures, A \u2299 B may inherit\nbeneficial properties from both.\n\nTry: Paley core \u2299 circulant, Hadamard submatrix \u2299 Toeplitz, etc.\n\"\"\"\nimport numpy as np\nfrom constructions import hadamard_24, paley_core\n\ndef generate_matrices():\n    N = 23\n    rng = np.random.RandomState(333)\n\n    results = []\n\n    # Base matrix A: Best Hadamard submatrix\n    H24 = hadamard_24()\n    A = np.delete(np.delete(H24, 10, axis=0), 3, axis=1).astype(np.int8)\n\n    # Matrix B1: Paley core with diagonal\n    Q = paley_core(N).astype(np.int8)\n    np.fill_diagonal(Q, 1)\n    AB1 = A * Q\n    results.append((AB1, 'hadprod_paley'))\n\n    # Matrix B2: Circulant\n    first_row = rng.choice([-1, 1], size=N).astype(np.int8)\n    B2 = np.zeros((N, N), dtype=np.int8)\n    for i in range(N):\n        B2[i] = np.roll(first_row, i)\n    AB2 = A * B2\n    results.append((AB2, 'hadprod_circ'))\n\n    # Matrix B3: Different Hadamard submatrix\n    B3 = np.delete(np.delete(H24, 15, axis=0), 8, axis=1).astype(np.int8)\n    AB3 = A * B3\n    results.append((AB3, 'hadprod_hadam'))\n\n    # Matrix B4: Random symmetric\n    upper = rng.choice([-1, 1], size=(N, N)).astype(np.int8)\n    B4 = np.triu(upper) + np.triu(upper, 1).T\n    np.fill_diagonal(B4, 1)\n    AB4 = A * B4\n    results.append((AB4, 'hadprod_sym'))\n\n    # Matrix B5: Alternating checkerboard\n    B5 = np.fromfunction(lambda i, j: 1 - 2*((i+j)%2), (N, N), dtype=np.int8)\n    AB5 = A * B5\n    results.append((AB5, 'hadprod_check'))\n\n    return results\n",
+    "rationale": "Hadamard product combines structural properties \u2014 Paley algebraic structure with Hadamard submatrix optimality",
+    "priority": 5,
+    "created_by": "hermod",
+    "attempts": 10,
+    "best_det": 0,
+    "best_name": null
+  },
+  {
+    "id": "auto_gram_relax",
+    "code": "\"\"\"\nGram matrix relaxation: Build the ideal Ehlich-structured Gram matrix\nG* directly, then perturb and factor via Cholesky to get candidate \u00b11 matrices.\nFor n=23, Ehlich structure: 4 blocks of sizes 6,6,6,5 with intra-block\ncorrelation +4 and inter-block -4, diagonal = 20.\n\"\"\"\nimport numpy as np\n\ndef generate_matrices():\n    N = 23\n    rng = np.random.RandomState(12345)\n    results = []\n\n    # Ideal Ehlich Gram: block-diagonal after subtracting J_\n    # Block sizes and structure\n    block_sizes = [6, 6, 6, 5]\n    G_ideal = np.full((N, N), -4, dtype=np.float64)\n    np.fill_diagonal(G_ideal, 20.0)\n    offset = 0\n    for bsize in block_sizes:\n        G_ideal[offset:offset+bsize, offset:offset+bsize] = 4.0\n        np.fill_diagonal(G_ideal[offset:offset+bsize, offset:offset+bsize], 20.0)\n        offset += bsize\n\n    for variant in range(5):\n        G = G_ideal.copy()\n        # Perturb with structured noise: vary block correlations\n        noise = rng.uniform(-2.5, 2.5, (N, N))\n        noise = np.triu(noise) + np.triu(noise, 1).T\n        np.fill_diagonal(noise, 0)\n        G += noise\n\n        # Ensure positive definiteness for Cholesky\n        eigenvalues = np.linalg.eigvalsh(G)\n        min_eig = eigenvalues[0]\n        if min_eig < 0.5:\n            G += np.eye(N) * (0.5 - min_eig + rng.uniform(0, 3))\n\n        try:\n            L = np.linalg.cholesky(G)  # G = L @ L.T\n            M = np.sign(L.T).astype(np.int8)\n            M[M == 0] = 1\n        except np.linalg.LinAlgError:\n            # Fallback: SVD projection\n            U, s, Vt = np.linalg.svd(G, hermitian=True)\n            s_clamped = np.maximum(s, 0.1)\n            L = U @ np.diag(np.sqrt(s_clamped))\n            M = np.sign(L @ rng.randn(N, N)).astype(np.int8)\n            M[M == 0] = 1\n\n        results.append((M, f'gram_relax_v{variant}'))\n\n    return results[:5]\n",
+    "rationale": "Gram relaxation \u2014 build the Ehlich-optimal Gram matrix directly in continuous space, factor via Cholesky, round to \u00b11. Bypasses entry-by-entry search by targeting the spectral structure that maximizes determinant",
+    "priority": 9,
+    "created_by": "autonomous",
+    "attempts": 5,
+    "best_det": 0,
+    "best_name": null
+  },
+  {
+    "id": "auto_svd_gradient",
+    "code": "\"\"\"\nSVD-Guided Entry Optimization. The gradient of log|det(M)| w.r.t. entry\nM[i,j] is (M^{-T})[i,j]. For near-Hadamard matrices, M^{-1} \u2248 M^T/24.\nUse this gradient to identify and flip the most promising entries,\ntargeting the singular values that most constrain the determinant.\n\"\"\"\nimport numpy as np\nfrom constructions import hadamard_24, paley_core\n\ndef generate_matrices():\n    N = 23\n    H24 = hadamard_24()\n    rng = np.random.RandomState(8675309)\n    results = []\n\n    # Diverse starting points\n    starts = []\n    starts.append(np.delete(np.delete(H24, 10, axis=0), 3, axis=1).astype(np.int8))\n    starts.append(np.delete(np.delete(H24, 16, axis=0), 4, axis=1).astype(np.int8))\n    starts.append(np.delete(np.delete(H24, 0, axis=0), 0, axis=1).astype(np.int8))\n\n    Q = paley_core(N).astype(np.int8)\n    Q1 = Q.copy(); np.fill_diagonal(Q1, 1); starts.append(Q1)\n    Q2 = Q.copy()\n    Q2[np.arange(N), np.arange(N)] = np.where(np.arange(N) % 2 == 0, 1, -1).astype(np.int8)\n    starts.append(Q2)\n\n    for idx, M0 in enumerate(starts[:5]):\n        M = M0.copy()\n        # Compute gradient via inverse\n        try:\n            M_inv = np.linalg.inv(M.astype(np.float64))\n        except np.linalg.LinAlgError:\n            M_inv = M.astype(np.float64).T / 24.0\n\n        grad = M_inv.T  # d(log|det|)/dM_ij = (M^{-T})_ij\n\n        # Flip entries where gradient sign opposes current sign\n        # (flipping sign when grad*entry > 0 would decrease det, so flip when grad*entry < 0)\n        flip_mask = (grad * M) < -0.01\n        # Only flip strongest 15% of candidates\n        grad_mag = np.abs(grad) * flip_mask.astype(np.float64)\n        flat = grad_mag.ravel()\n        threshold = np.percentile(flat[flat > 0], 85) if np.any(flat > 0) else 1e10\n        flip_mask &= (np.abs(grad) >= threshold * 0.5)\n\n        M[flip_mask] *= -1\n        results.append((M, f'svd_grad_{idx}'))\n\n    return results\n",
+    "rationale": "SVD-gradient guided flips \u2014 use M^{-T} as the exact gradient of log|det| w.r.t. each entry, flip entries where gradient predicts improvement. Mathematically principled alternative to blind coordinate exchange",
+    "priority": 9,
+    "created_by": "autonomous",
+    "attempts": 0,
+    "best_det": 0,
+    "best_name": null
+  },
+  {
+    "id": "auto_quasi_williamson",
+    "code": "\"\"\"\nBordered Quasi-Williamson construction: Build a 24\u00d724 matrix from\n4 circulant blocks (6\u00d76 each) using the Goethals-Seidel array,\nthen delete first row/col for 23\u00d723.\n\nGS array: [[A, BR, CR, DR], [-BR, A, -DR^T, CR^T],\n           [-CR, DR^T, A, -BR^T], [-DR, -CR^T, BR^T, A]]\nwhere R is the back-diagonal identity. Only 24 parameters (4\u00d76)\ncontrol the entire 24\u00d724 structure.\n\"\"\"\nimport numpy as np\n\ndef circulant(first_row):\n    n = len(first_row)\n    idx = (np.arange(n)[:, None] - np.arange(n)[None, :]) % n\n    return first_row[idx].astype(np.int8)\n\ndef back_diag_mat(n):\n    return np.fliplr(np.eye(n, dtype=np.int8))\n\ndef generate_matrices():\n    N = 23\n    bs = 6\n    block_count = 4\n    rng = np.random.RandomState(420420)\n    results = []\n\n    R = back_diag_mat(bs)\n\n    for variant in range(5):\n        # 4 circulant first rows, 6 entries each = 24 binary params\n        A_row = rng.choice([-1, 1], size=bs).astype(np.int8)\n        B_row = rng.choice([-1, 1], size=bs).astype(np.int8)\n        C_row = rng.choice([-1, 1], size=bs).astype(np.int8)\n        D_row = rng.choice([-1, 1], size=bs).astype(np.int8)\n\n        A = circulant(A_row)\n        B = circulant(B_row)\n        C = circulant(C_row)\n        D = circulant(D_row)\n\n        # Precompute R-transformed blocks\n        BR = B @ R\n        CR = C @ R\n        DR = D @ R\n        DRT = DR.T\n        CRT = CR.T\n        BRT = BR.T\n\n        # Assemble 24\u00d724 Goethals-Seidel array (vectorized)\n        H24 = np.zeros((24, 24), dtype=np.int8)\n        # Row block 0\n        H24[0:6, 0:6] = A; H24[0:6, 6:12] = BR\n        H24[0:6, 12:18] = CR; H24[0:6, 18:24] = DR\n        # Row block 1\n        H24[6:12, 0:6] = -BR; H24[6:12, 6:12] = A\n        H24[6:12, 12:18] = -DRT; H24[6:12, 18:24] = CRT\n        # Row block 2\n        H24[12:18, 0:6] = -CR; H24[12:18, 6:12] = DRT\n        H24[12:18, 12:18] = A; H24[12:18, 18:24] = -BRT\n        # Row block 3\n        H24[18:24, 0:6] = -DR; H24[18:24, 6:12] = -CRT\n        H24[18:24, 12:18] = BRT; H24[18:24, 18:24] = A\n\n        # Delete first row/col \u2192 23\u00d723\n        M = np.delete(np.delete(H24, variant % 4, axis=0),\n                      (variant * 5 + 1) % 24, axis=1).astype(np.int8)\n\n        results.append((M, f'quasi_williamson_v{variant}'))\n\n    return results\n",
+    "rationale": "Quasi-Williamson via Goethals-Seidel array \u2014 4 circulant 6\u00d76 blocks compactly parameterize a 24\u00d724 with only 24 binary degrees of freedom. Deleting row/col yields a structured 23\u00d723 distinct from H24-submatrix and Paley approaches",
+    "priority": 8,
+    "created_by": "autonomous",
+    "attempts": 0,
+    "best_det": 0,
+    "best_name": null
+  }
+]
