@@ -55,7 +55,7 @@ def generate_candidates_phase(state: dict, iteration: int) -> tuple[list[tuple[n
     """
 
     # ---- STRATEGY QUEUE ----
-    strategy = get_next_strategy(state.get("best_determinant", 0))
+    strategy = get_next_strategy(state.get("best_determinant") or 0)
     if strategy:
         print(f"  [STRATEGY] Executing: {strategy['rationale']} (attempt {strategy['attempts']+1})")
         try:
