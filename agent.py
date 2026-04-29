@@ -33,7 +33,7 @@ from constructions import (
     hadamard_24, from_hadamard_all_deletions,
     random_circulant, random_toeplitz, random_flip
 )
-from strategy_queue import load_strategies, get_next_strategy, record_attempt, init_seed_strategies
+from strategy_queue import load_strategies, get_next_strategy, record_attempt, record_error, init_seed_strategies
 
 PROJECT_DIR = Path(__file__).parent
 
@@ -53,11 +53,13 @@ def generate_candidates_phase(state: dict, iteration: int) -> list[tuple[np.ndar
     """
 
     # ---- STRATEGY QUEUE ----
-    strategy = get_next_strategy()
+    strategy = get_next_strategy(state.get("best_determinant", 0))
     if strategy:
         print(f"  [STRATEGY] Executing: {strategy['rationale']} (attempt {strategy['attempts']+1})")
         try:
-            namespace = {"np": np, "__builtins__": __builtins__}
+            namespace = {"np": np, "__builtins__": __builtins__,
+                         "PROJECT_DIR": str(PROJECT_DIR),
+                         "__file__": str(PROJECT_DIR / "strategy_exec.py")}
             sys.path.insert(0, str(PROJECT_DIR))
             from constructions import paley_core, hadamard_24
             namespace["paley_core"] = paley_core
@@ -72,12 +74,13 @@ def generate_candidates_phase(state: dict, iteration: int) -> list[tuple[np.ndar
                     method = f"strategy_{strategy['id']}"
                     candidates.append((matrix, name, method))
                     # Record attempt
-                    record_attempt(strategy["id"], 0, name)
+                    record_attempt(strategy["id"], abs(int(np.linalg.det(matrix))), name)
                 return candidates
         except Exception as e:
             print(f"  [STRATEGY ERROR] {e}")
             import traceback
             traceback.print_exc()
+            record_error(strategy["id"], str(e))
 
     # ---- PROGRAMMATIC FALLBACK ----
     return _programmatic_generate(state, iteration, count=5)

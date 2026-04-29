@@ -57,25 +57,103 @@ def add_strategy(code: str, rationale: str, created_by: str = "hermod",
     return strategy["id"]
 
 
-def get_next_strategy() -> dict | None:
-    """Get the highest-priority strategy that hasn't been exhausted (< 10 attempts)."""
+def get_next_strategy(state_best_det: int = 0) -> dict | None:
+    """Get the best strategy considering priority + penalty for staleness.
+    
+    Penalty: If a strategy produced the SAME best_det for 3+ attempts
+    (matches the global state_best_det), its effective priority is halved.
+    Strategies that found NEW records get a bonus.
+    Crash penalty: strategies that error 3+ times in a row get demoted."""
     strategies = load_strategies()
     available = [s for s in strategies if s["attempts"] < 10]
     if not available:
         return None
-    available.sort(key=lambda s: s["priority"], reverse=True)
+    
+    # Apply penalty/bonus to priorities
+    for s in available:
+        eff_priority = s["priority"]
+        stale = s.get("stale_rounds", 0)
+        last_best = s.get("last_best_det", 0)
+        crash_count = s.get("crash_count", 0)
+        crash_streak = s.get("crash_streak", 0)
+        
+        # CRASH PENALTY: repeated errors → demote hard
+        if crash_streak >= 5:
+            eff_priority = -2  # dead
+        elif crash_streak >= 3:
+            eff_priority = max(-1, eff_priority - 6)  # severe demotion
+        elif crash_count >= 5:
+            eff_priority = max(0, eff_priority - 3)  # persistent failures
+        
+        # PENALTY: stale -> priority decay
+        if stale >= 5:
+            eff_priority = -1  # kill it
+        elif stale >= 3:
+            eff_priority = max(0, eff_priority - 4)
+        elif stale >= 1:
+            eff_priority = max(0, eff_priority - 1)
+        
+        # BONUS: produced a best above global best
+        if last_best > state_best_det and state_best_det > 0:
+            eff_priority = min(10, eff_priority + 3)
+        
+        # BONUS: unexplored strategies (only if hasn't crashed yet)
+        if s["attempts"] == 0 and crash_streak == 0:
+            eff_priority += 1
+        
+        s["_eff_priority"] = eff_priority
+    
+    available.sort(key=lambda s: (s["_eff_priority"], s["priority"]), reverse=True)
     return available[0]
 
 
+def record_error(strategy_id: str, error_msg: str) -> None:
+    """Record that a strategy execution failed (crash/exception).
+    
+    Tracks crash streak and total crash count for penalty calculation.
+    Consecutive crashes increase penalty; a successful run resets the streak."""
+    strategies = load_strategies()
+    for s in strategies:
+        if s["id"] == strategy_id:
+            s.setdefault("crash_count", 0)
+            s.setdefault("crash_streak", 0)
+            s["crash_count"] += 1
+            s["crash_streak"] += 1
+            s.setdefault("last_error", "")
+            s["last_error"] = error_msg[:200]
+            break
+    save_strategies(strategies)
+
+
 def record_attempt(strategy_id: str, det_abs: int, name: str) -> None:
-    """Record that a strategy was attempted with a given result."""
+    """Record that a strategy was attempted with a given result.
+    
+    Now tracks staleness: if a strategy produces a determinant that
+    doesn't improve over its own best, increment stale_rounds.
+    Resets crash_streak on successful execution."""
     strategies = load_strategies()
     for s in strategies:
         if s["id"] == strategy_id:
             s["attempts"] += 1
+            
+            # Initialize penalty fields
+            s.setdefault("stale_rounds", 0)
+            s.setdefault("consecutive_duplicates", 0)
+            s.setdefault("last_best_det", 0)
+            
+            # Reset crash streak on success
+            s["crash_streak"] = 0
+            
             if det_abs > s["best_det"]:
                 s["best_det"] = det_abs
                 s["best_name"] = name
+                s["stale_rounds"] = 0  # RESET on improvement!
+                s["consecutive_duplicates"] = 0
+            else:
+                s["consecutive_duplicates"] += 1
+                s["stale_rounds"] += 1
+            
+            s["last_best_det"] = det_abs
             break
     save_strategies(strategies)
 
