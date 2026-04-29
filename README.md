@@ -76,19 +76,19 @@ Strategies are Python code objects in a JSON queue, each with:
 ## Results (318 runs, 1,590 matrices, 40+ strategies)
 
 ### Best Determinants Found
+### Best Determinants Found
 
-| Rank | det | % World Record | % Barba | Strategy | Note |
-|---|---|---|---|---|---|---|
-| 🥇 | 2,779,447,296,000,000 | 100.0% | 70.9% | `hermod_orrick_perturb` | **Orrick world record confirmed** |
-| 🥈 | 2,385,859,554,836,488 | 85.8% | 60.9% | `auto_dft_circulant_descent` | DFT-based island, found independently |
-| 🥉 | 2,355,757,055,999,990 | 84.8% | 60.1% | `hermod_orrick_perturb` | Double-flip on Orrick matrix |
+| Rank | det | % WR | % Barba | Strategy | Note |
+|------|-----|------|---------|----------|------|
+| &#x1f947; | 2,779,447,296,000,000 | 100.0% | 70.9% | `hermod_orrick_perturb` | Orrick world record confirmed |
+| &#x1f948; | 2,385,859,554,836,488 | 85.8% | 60.9% | `auto_dft_circulant_descent` | DFT island, independent |
+| &#x1f949; | 2,355,757,055,999,990 | 84.8% | 60.1% | `hermod_orrick_perturb` | Double-flip on Orrick matrix |
 | 4 | 2,338,054,471,680,024 | 84.1% | 59.6% | `hermod_orrick_perturb` | Double-flip variant |
 | 5 | 2,231,107,584,000,011 | 80.3% | 56.9% | `hermod_orrick_perturb` | Double-flip variant |
 | 6 | 1,745,879,438,458,882 | 62.8% | 44.5% | `auto_dft_circulant_descent` | DFT v3 iteration |
-| 7 | 1,616,863,222,038,528 | 58.2% | 41.2% | `hermod_simulated_annealing` | Previous plateau champion |
-| 8 | 1,597,260,756,418,553 | 57.5% | 40.7% | `auto_block_exhaustive` | Block exhaustive search |
+| 7 | 1,616,863,222,038,528 | 58.2% | 41.2% | `hermod_simulated_annealing` | Plateau champion |
+| 8 | 1,597,260,756,418,553 | 57.5% | 40.7% | `auto_block_exhaustive` | Block exhaustive |
 
-### Key Findings
 
 1. **Orrick world record confirmed**: The agent loaded the 2003 record matrix and verified |det| = 2,779,447,296,000,000.
 
