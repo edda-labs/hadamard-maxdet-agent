@@ -313,13 +313,17 @@ def generate_candidates(method: str, count: int = 5,
     return results
 
 
-# List all available construction methods
+# Methods auto-selected by the programmatic fallback.
+# `hadamard_submatrix` is excluded: by Sharpe's identity every (n-1)x(n-1)
+# minor of an n-Hadamard matrix has |det| = n^((n-2)/2), so all 576 deletions
+# of H24 give |det| = 24^11. Re-running it can't improve anything; strategies
+# that want H24 deletions as a starting point still call hadamard_24() directly.
+# `block_circulant` is excluded: 23 is prime, so no non-trivial block-circulant
+# of order 23 exists, and the [11,12] split in the old code crashed anyway.
 CONSTRUCTION_METHODS = [
-    "hadamard_submatrix",
     "conference_paley",
     "circulant",
     "toeplitz",
-    "block_circulant",
     "random",
     "skew_symmetric",
     "symmetric",

@@ -18,6 +18,38 @@ import os
 
 N = 23
 
+
+def integer_det(matrix: np.ndarray) -> int:
+    """Exact determinant for integer matrices via Bareiss (fraction-free LU).
+
+    np.linalg.det uses float64 LU; for 23x23 ±1 matrices the true |det| sits
+    around 10^15, right at float64's ~16-digit boundary, so identical matrices
+    can return values that differ by tens of ULPs. That breaks equality-based
+    stagnation checks and lets noise reset staleness counters. Bareiss is exact
+    in Python big-int and runs in milliseconds at this size.
+    """
+    n = matrix.shape[0]
+    A = [[int(matrix[i, j]) for j in range(n)] for i in range(n)]
+    sign = 1
+    prev = 1
+    for i in range(n - 1):
+        if A[i][i] == 0:
+            pivot = -1
+            for k in range(i + 1, n):
+                if A[k][i] != 0:
+                    pivot = k
+                    break
+            if pivot < 0:
+                return 0
+            A[i], A[pivot] = A[pivot], A[i]
+            sign = -sign
+        for j in range(i + 1, n):
+            for k in range(i + 1, n):
+                A[j][k] = (A[j][k] * A[i][i] - A[j][i] * A[i][k]) // prev
+            A[j][i] = 0
+        prev = A[i][i]
+    return sign * A[n - 1][n - 1]
+
 # Current best known determinant for order 23 {±1} matrix
 # g(23) = 2^22 * a(22) where a(22)=662_671_875 is the {0,1} record (UNCERTAIN)
 BEST_KNOWN_G = int(2**22 * 662_671_875)
@@ -59,7 +91,7 @@ def verify_matrix(matrix: np.ndarray, name: str = "unnamed",
     if not np.all(np.isin(matrix, [-1, 1])):
         raise ValueError("Matrix must contain only +1 and -1 entries")
 
-    det_signed = int(round(np.linalg.det(matrix)))
+    det_signed = integer_det(matrix)
     det_abs = abs(det_signed)
 
     improves = det_abs > BEST_KNOWN_G
@@ -155,6 +187,14 @@ def update_state(state: dict, results: list[TestResult],
             state["best_determinant"] = best["det_abs"]
             state["best_matrix_name"] = best["name"]
             state["best_construction"] = best["construction"]
+
+    if results:
+        state.setdefault("history", []).append({
+            "iteration": iteration,
+            "best_det": max(r.det_abs for r in results),
+            "session_best_det": state.get("best_determinant", 0),
+            "n_results": len(results),
+        })
 
     save_state(state, state_path)
     return state

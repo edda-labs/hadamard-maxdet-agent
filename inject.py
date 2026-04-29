@@ -328,7 +328,7 @@ def generate_matrices():
 ]
 
 # Load existing queue, append new strategies
-queue_path = Path('/home/marc/.hermes/hadamard-research/strategy_queue.json')
+queue_path = Path(__file__).parent / "strategy_queue.json"
 queue = json.loads(queue_path.read_text())
 
 existing_ids = {s['id'] for s in queue}

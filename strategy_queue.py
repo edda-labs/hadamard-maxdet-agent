@@ -228,8 +228,10 @@ def generate_matrices():
         elif diag_pattern == 3:
             M[np.arange(23), np.arange(23)] = np.where(np.arange(23) % 3 == 0, 1, -1)
         else:
-            # All zeros on diagonal (not ±1! fix below)
-            np.fill_diagonal(M, 1)
+            # Quadratic-residue-based diagonal (distinct from patterns 0-3).
+            residues = {pow(i, 2, 23) for i in range(1, 23)}
+            diag = np.array([1 if i in residues else -1 for i in range(23)], dtype=np.int8)
+            M[np.arange(23), np.arange(23)] = diag
 
         results.append((M, f'paley_diag_{diag_pattern}'))
 
@@ -257,7 +259,10 @@ def generate_matrices():
     for i in range(5):
         # Generate first row with specific patterns
         if i == 0:
+            # First row = all 1s makes row 2 == row 0 (det = 0). Use a single
+            # -1 in the middle to break the symmetry while staying structured.
             first_row = np.ones(N, dtype=np.int8)
+            first_row[N // 2] = -1
         elif i == 1:
             first_row = np.array([1, -1] * 11 + [1], dtype=np.int8)
         elif i == 2:

@@ -41,15 +41,17 @@ PROJECT_DIR = Path(__file__).parent
 # 1. GENERATE — LLM-driven candidate generation
 # ============================================================================
 
-def generate_candidates_phase(state: dict, iteration: int) -> list[tuple[np.ndarray, str, str]]:
+def generate_candidates_phase(state: dict, iteration: int) -> tuple[list[tuple[np.ndarray, str, str]], str | None]:
     """
     Generate 5 candidate matrices.
     Priority: Strategy queue → programmatic exploration.
 
-    The strategy queue is populated by Hermod (the main agent) when Marc asks for updates.
-    Each strategy contains executable Python code that generates candidate matrices.
-
-    Returns list of (matrix, name, construction_method) tuples.
+    Returns (candidates, active_strategy_id). The strategy_id is None for the
+    programmatic fallback path; otherwise it's the id of the strategy whose
+    code produced the candidates. The caller is responsible for calling
+    record_attempt exactly once per invocation after testing — recording
+    per-matrix here would inflate `attempts` 5x and bump `stale_rounds` past
+    the auto-kill threshold after a single successful run.
     """
 
     # ---- STRATEGY QUEUE ----
@@ -73,9 +75,7 @@ def generate_candidates_phase(state: dict, iteration: int) -> list[tuple[np.ndar
                 for matrix, name in matrices[:5]:
                     method = f"strategy_{strategy['id']}"
                     candidates.append((matrix, name, method))
-                    # Record attempt
-                    record_attempt(strategy["id"], abs(int(np.linalg.det(matrix))), name)
-                return candidates
+                return candidates, strategy["id"]
         except Exception as e:
             print(f"  [STRATEGY ERROR] {e}")
             import traceback
@@ -83,7 +83,7 @@ def generate_candidates_phase(state: dict, iteration: int) -> list[tuple[np.ndar
             record_error(strategy["id"], str(e))
 
     # ---- PROGRAMMATIC FALLBACK ----
-    return _programmatic_generate(state, iteration, count=5)
+    return _programmatic_generate(state, iteration, count=5), None
 
 
 def _programmatic_generate(state: dict, iteration: int, count: int = 5) -> list[tuple[np.ndarray, str, str]]:
@@ -381,7 +381,7 @@ def run_iteration(iteration: int, state_path: str = "state.json") -> dict:
     # Phase 1: Generate
     print("\n[1/6] GENERATE — creating 5 candidate matrices...")
     t0 = time.time()
-    candidates = generate_candidates_phase(state, iteration)
+    candidates, active_strategy_id = generate_candidates_phase(state, iteration)
     print(f"  Generated {len(candidates)} candidates in {time.time()-t0:.1f}s")
     for _, name, method in candidates:
         print(f"    • {name} ({method})")
@@ -394,6 +394,19 @@ def run_iteration(iteration: int, state_path: str = "state.json") -> dict:
     for r in results:
         flag = " 🏆" if r.improves_record else ""
         print(f"    • {r.name}: |det|={r.det_abs:,} ({r.pct_of_barba:.4f}% Barba){flag}")
+
+    # Aggregate strategy outcome: one record_attempt per invocation, using the
+    # max integer-det across the 5 candidates. Per-matrix recording (the old
+    # behavior) bumped `attempts` to 5 and `stale_rounds` to 4 after a single
+    # successful run, killing strategies after 2 invocations.
+    if active_strategy_id is not None:
+        tag = f"strategy_{active_strategy_id}"
+        sresults = [r for r in results if r.construction_method == tag]
+        if sresults:
+            best_r = max(sresults, key=lambda r: r.det_abs)
+            record_attempt(active_strategy_id, best_r.det_abs, best_r.name)
+        else:
+            record_attempt(active_strategy_id, 0, "no_valid_matrices")
 
     # Phase 3: Analyze
     print("\n[3/6] ANALYZE — finding patterns...")
