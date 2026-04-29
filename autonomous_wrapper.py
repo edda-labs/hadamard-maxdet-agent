@@ -18,10 +18,16 @@ print(f"[agent exit: {exit_code}]")
 state = json.loads((PROJECT_DIR / "state.json").read_text())
 queue = json.loads((PROJECT_DIR / "strategy_queue.json").read_text())
 
-# 3. Count healthy strategies (not exhausted, not stale-dead)
-available = [s for s in queue if s["attempts"] < 10 and s.get("stale_rounds", 0) < 5]
-just_stale = [s for s in queue if s["attempts"] < 10 and s.get("stale_rounds", 0) >= 5]
-exhausted = [s for s in queue if s["attempts"] >= 10]
+# 3. Count healthy strategies. Two independent kill signals:
+#      stale_rounds >= 5         (no improvement for 5 invocations)
+#      consecutive_duplicates >= 3  (same exact det 3+ runs in a row = locked)
+def _is_dead(s):
+    return (s.get("stale_rounds", 0) >= 5
+            or s.get("consecutive_duplicates", 0) >= 3)
+
+available = [s for s in queue if not _is_dead(s)]
+just_stale = [s for s in queue if _is_dead(s)]
+exhausted = []
 
 # 4. Auto-kill strategies with stale_rounds >= 5
 if just_stale:

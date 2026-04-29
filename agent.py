@@ -55,14 +55,15 @@ def generate_candidates_phase(state: dict, iteration: int) -> tuple[list[tuple[n
     """
 
     # ---- STRATEGY QUEUE ----
-    strategy = get_next_strategy(state.get("best_determinant") or 0)
+    strategy = get_next_strategy(state.get("best_determinant", 0))
     if strategy:
         print(f"  [STRATEGY] Executing: {strategy['rationale']} (attempt {strategy['attempts']+1})")
         try:
             namespace = {"np": np, "__builtins__": __builtins__,
                          "PROJECT_DIR": str(PROJECT_DIR),
                          "__file__": str(PROJECT_DIR / "strategy_exec.py")}
-            sys.path.insert(0, str(PROJECT_DIR))
+            if str(PROJECT_DIR) not in sys.path:
+                sys.path.insert(0, str(PROJECT_DIR))
             from constructions import paley_core, hadamard_24
             namespace["paley_core"] = paley_core
             namespace["hadamard_24"] = hadamard_24

@@ -12,6 +12,7 @@ Reference: OEIS A003432 / A003433
 import numpy as np
 from dataclasses import dataclass
 from typing import Optional
+import base64
 import hashlib
 import json
 import os
@@ -73,6 +74,7 @@ class TestResult:
     pct_of_barba: float  # % of Barba upper bound
     matrix_hash: str  # SHA256 of matrix for dedup
     construction_method: str
+    matrix_b64: str = ""  # base64 of int8 entries — needed for warm-start across runs
 
 
 def matrix_hash(matrix: np.ndarray) -> str:
@@ -98,6 +100,8 @@ def verify_matrix(matrix: np.ndarray, name: str = "unnamed",
     improvement = ((det_abs - BEST_KNOWN_G) / BEST_KNOWN_G) * 100
     pct_barba = (det_abs / BARBA_BOUND) * 100
 
+    matrix_b64 = base64.b64encode(matrix.astype(np.int8).tobytes()).decode("ascii")
+
     return TestResult(
         name=name,
         det_abs=det_abs,
@@ -108,6 +112,7 @@ def verify_matrix(matrix: np.ndarray, name: str = "unnamed",
         pct_of_barba=pct_barba,
         matrix_hash=matrix_hash(matrix),
         construction_method=construction_method,
+        matrix_b64=matrix_b64,
     )
 
 
@@ -145,7 +150,7 @@ def load_state(state_path: str = "state.json") -> dict:
 def save_state(state: dict, state_path: str = "state.json") -> None:
     """Save state, keeping history bounded."""
     state["history"] = state["history"][-20:]
-    state["top_matrices"] = state["top_matrices"][:10]
+    state["top_matrices"] = state["top_matrices"][:50]
     with open(state_path, "w") as f:
         json.dump(state, f, indent=2, default=str)
 
@@ -168,17 +173,21 @@ def update_state(state: dict, results: list[TestResult],
             state["construction_stats"][method]["best_det"] = r.det_abs
             state["construction_stats"][method]["best_name"] = r.name
 
-        # Update top matrices
+        # Update top matrices — keep a larger pool (50) for diverse warm-start seeds
+        # and drop hash-duplicates so an identical matrix doesn't fill the slot N times.
         entry = {
             "name": r.name,
             "det_abs": r.det_abs,
             "construction": r.construction_method,
             "pct_of_barba": round(r.pct_of_barba, 4),
             "hash": r.matrix_hash,
+            "matrix_b64": r.matrix_b64,
         }
-        state["top_matrices"].append(entry)
+        existing_hashes = {e.get("hash") for e in state["top_matrices"]}
+        if r.matrix_hash not in existing_hashes:
+            state["top_matrices"].append(entry)
         state["top_matrices"].sort(key=lambda x: x["det_abs"], reverse=True)
-        state["top_matrices"] = state["top_matrices"][:10]
+        state["top_matrices"] = state["top_matrices"][:50]
 
     # Update best known
     if state["top_matrices"]:

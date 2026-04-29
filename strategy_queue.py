@@ -65,7 +65,9 @@ def get_next_strategy(state_best_det: int = 0) -> dict | None:
     Strategies that found NEW records get a bonus.
     Crash penalty: strategies that error 3+ times in a row get demoted."""
     strategies = load_strategies()
-    available = [s for s in strategies if s["attempts"] < 10]
+    # No hard attempts cap: stale_rounds + crash_streak are the kill mechanism.
+    # A successful strategy that keeps finding new bests should run indefinitely.
+    available = list(strategies)
     if not available:
         return None
     
@@ -73,34 +75,37 @@ def get_next_strategy(state_best_det: int = 0) -> dict | None:
     for s in available:
         eff_priority = s["priority"]
         stale = s.get("stale_rounds", 0)
+        plateau = s.get("consecutive_duplicates", 0)
         last_best = s.get("last_best_det", 0)
         crash_count = s.get("crash_count", 0)
         crash_streak = s.get("crash_streak", 0)
-        
-        # CRASH PENALTY: repeated errors → demote hard
+
+        # PENALTIES — mutually exclusive kill signals, applied in priority order.
         if crash_streak >= 5:
             eff_priority = -2  # dead
+        elif plateau >= 3:
+            eff_priority = -1  # plateau-kill (structural lock)
+        elif stale >= 5:
+            eff_priority = -1  # stale-kill (no improvement for 5 runs)
         elif crash_streak >= 3:
-            eff_priority = max(-1, eff_priority - 6)  # severe demotion
-        elif crash_count >= 5:
-            eff_priority = max(0, eff_priority - 3)  # persistent failures
-        
-        # PENALTY: stale -> priority decay
-        if stale >= 5:
-            eff_priority = -1  # kill it
+            eff_priority = max(-1, eff_priority - 6)
+        elif plateau >= 2:
+            eff_priority = max(-1, eff_priority - 5)
         elif stale >= 3:
             eff_priority = max(0, eff_priority - 4)
+        elif crash_count >= 5:
+            eff_priority = max(0, eff_priority - 3)
         elif stale >= 1:
             eff_priority = max(0, eff_priority - 1)
-        
+
         # BONUS: produced a best above global best
         if last_best > state_best_det and state_best_det > 0:
             eff_priority = min(10, eff_priority + 3)
-        
+
         # BONUS: unexplored strategies (only if hasn't crashed yet)
         if s["attempts"] == 0 and crash_streak == 0:
             eff_priority += 1
-        
+
         s["_eff_priority"] = eff_priority
     
     available.sort(key=lambda s: (s["_eff_priority"], s["priority"]), reverse=True)
@@ -127,32 +132,39 @@ def record_error(strategy_id: str, error_msg: str) -> None:
 
 def record_attempt(strategy_id: str, det_abs: int, name: str) -> None:
     """Record that a strategy was attempted with a given result.
-    
-    Now tracks staleness: if a strategy produces a determinant that
-    doesn't improve over its own best, increment stale_rounds.
-    Resets crash_streak on successful execution."""
+
+    Two independent penalty signals are tracked:
+      - stale_rounds: increments on any non-improvement (catches stagnation
+        even if the values vary).
+      - consecutive_duplicates: increments only when the run produces the
+        EXACT same det as the previous run (catches structural lock — e.g. a
+        Hadamard-submatrix strategy always returning 24^11).
+    """
     strategies = load_strategies()
     for s in strategies:
         if s["id"] == strategy_id:
             s["attempts"] += 1
-            
-            # Initialize penalty fields
             s.setdefault("stale_rounds", 0)
             s.setdefault("consecutive_duplicates", 0)
             s.setdefault("last_best_det", 0)
-            
-            # Reset crash streak on success
+
+            # Reset crash streak on successful execution
             s["crash_streak"] = 0
-            
+
+            # Plateau detection: exact-duplicate run det = structural lock
+            if det_abs == s["last_best_det"]:
+                s["consecutive_duplicates"] += 1
+            else:
+                s["consecutive_duplicates"] = 0
+
+            # Stale tracking: any non-improvement over personal best
             if det_abs > s["best_det"]:
                 s["best_det"] = det_abs
                 s["best_name"] = name
-                s["stale_rounds"] = 0  # RESET on improvement!
-                s["consecutive_duplicates"] = 0
+                s["stale_rounds"] = 0
             else:
-                s["consecutive_duplicates"] += 1
                 s["stale_rounds"] += 1
-            
+
             s["last_best_det"] = det_abs
             break
     save_strategies(strategies)
