@@ -77,7 +77,7 @@ Strategies are Python code objects in a JSON queue, each with:
 
 ### Best Determinants Found
 
-| Rank | |det| | % World Record | % Barba | Strategy | Note |
+| Rank | det | % World Record | % Barba | Strategy | Note |
 |---|---|---|---|---|---|---|
 | 🥇 | 2,779,447,296,000,000 | 100.0% | 70.9% | `hermod_orrick_perturb` | **Orrick world record confirmed** |
 | 🥈 | 2,385,859,554,836,488 | 85.8% | 60.9% | `auto_dft_circulant_descent` | DFT-based island, found independently |
